@@ -21,13 +21,13 @@ public class EmployeeManager {
 	Connection conn = null;
 	Database db = new Database();
 
-	Map<Integer, Tuple> map = new HashMap<>();
+	Map<Integer, Team> map = new HashMap<>();
 
-	public void readFilePopulateDB() throws Exception {
+	public void readFilePopulateDB(String filePath) throws Exception {
 
 		BufferedReader br = null;
 		try {
-			br = new BufferedReader(new FileReader("/home/mariya/Desktop/Employees.txt"));
+			br = new BufferedReader(new FileReader(filePath));
 
 			PreparedStatement insert;
 			db.createConnection();
@@ -77,11 +77,18 @@ public class EmployeeManager {
 
 	public void findTeamLongestPeriod() {
 		// execute db query
-
-		String SQL = "select p1.empid as empid1, p2.empid as empid2, p1.projectId as projectid ,MAX(datediff(dd,  CASE WHEN  p1.datefrom >  p2.datefrom THEN  p1.datefrom ELSE  p2.datefrom END, CASE WHEN  p1.dateto >  p2.dateto THEN  p2.dateto ELSE  p1.dateto END)) as period "
+		//selects the team that worked the longest within a project
+		String oldSQL = "select p1.empid as empid1, p2.empid as empid2, p1.projectId as projectid ,MAX(datediff(dd,  CASE WHEN  p1.datefrom >  p2.datefrom THEN  p1.datefrom ELSE  p2.datefrom END, CASE WHEN  p1.dateto >  p2.dateto THEN  p2.dateto ELSE  p1.dateto END)) as period "
 				+ "from projects p1, projects p2 "
 				+ "where p1.empid <> p2.empid and p1.projectid = p2.projectid and ((p2.datefrom < p1.dateto) ) "
 				+ "group by p1.empid, p2.empid " + "order by period desc";
+		
+		//selects the team that worked the longest at all no matter in which project 
+		String SQL = "select p1.empid as empid1, p2.empid as empid2, Sum(datediff(dd,  CASE WHEN  p1.datefrom >  p2.datefrom THEN  p1.datefrom ELSE  p2.datefrom END, CASE WHEN  p1.dateto >  p2.dateto THEN  p2.dateto ELSE  p1.dateto END)) as period "
+				+ "from projects p1, projects p2 "
+				+ "where p1.empid < p2.empid and p1.projectid = p2.projectid and p2.datefrom <= p1.dateto and p2.dateto >= p1.datefrom "
+				+ "group by p1.empid, p2.empid "
+				+ "order by period desc";
 
 		try {
 			PreparedStatement ps = null;
@@ -89,31 +96,30 @@ public class EmployeeManager {
 			ResultSet rs = ps.executeQuery();
 			
 			
-			
-			while (rs.next()) {
-				
+			while(rs.next()) {
 				if (map.isEmpty() || map.containsKey( rs.getInt("Period"))) {
 					
-						Team t = new Team(rs.getInt("empid1"), rs.getInt("empid2"));
-						Tuple tuple = new Tuple(t, rs.getInt("projectId"));
-						if(map.containsValue(tuple)) {
+						Team team = new Team(rs.getInt("empid1"), rs.getInt("empid2"));
+						
+						if(map.containsKey(team)) {
 							continue;
 						}
 						else {
 							Integer period = rs.getInt("Period");
-							this.map.put(period,tuple);
+							this.map.put(period,team);
 						}
 				}	
 			}
-			String resultString = "Team longest period: ";
 			
-			Collection<Tuple> allTuples = map.values();
-			for(Tuple t : allTuples) {
-				resultString = resultString + "EmpId1 - " + t.getTeam().getEmployeeId1() + "EmpId2 - " + t.getTeam().getEmployeeId2() + "\n";
+			String resultString = "Team longest period: \n";
+			
+			Collection<Team> allTeams = map.values();
+			for(Team t : allTeams) {
+				resultString = resultString + "EmpId1 - " + t.getEmployeeId1() + ", EmpId2 - " + t.getEmployeeId2() + "\n";
 			}
 			
-			//System.out.println(resultString);
-			System.console().writer().println(resultString);
+			
+			System.out.println(resultString);
 
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -124,7 +130,9 @@ public class EmployeeManager {
 
 	public static void main(String[] args) throws Exception {
 		EmployeeManager empManager = new EmployeeManager();
-		empManager.readFilePopulateDB();
+		
+		String filePath = args[0];
+		empManager.readFilePopulateDB(filePath);
 		empManager.findTeamLongestPeriod();
 
 
